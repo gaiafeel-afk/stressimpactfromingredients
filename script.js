@@ -150,6 +150,8 @@ const supportList = document.getElementById("supportList");
 const recommendationList = document.getElementById("recommendationList");
 
 let selectedPhotoFile = null;
+let photoAnalysis = null;
+let photoAnalysisInFlight = false;
 
 function showError(message) {
   errorText.hidden = false;
@@ -164,6 +166,7 @@ function hideError() {
 function setLoading(isLoading) {
   submitButton.disabled = isLoading;
   submitButton.textContent = isLoading ? "Analyzing..." : "Submit";
+  syncPhotoButtonState();
 }
 
 function setPhotoStatus(message) {
@@ -185,6 +188,34 @@ function setAiVerdict(text) {
 
   aiVerdictSection.hidden = false;
   aiVerdictText.textContent = text;
+}
+
+function getPhotoSignature(file) {
+  return `${file.name}|${file.size}|${file.lastModified}`;
+}
+
+function syncPhotoButtonState() {
+  if (photoAnalysisInFlight) {
+    photoButton.textContent = "Analyzing Photo...";
+    photoButton.disabled = true;
+    return;
+  }
+
+  if (submitButton.disabled) {
+    photoButton.disabled = true;
+    return;
+  }
+
+  photoButton.disabled = false;
+
+  if (!selectedPhotoFile) {
+    photoButton.textContent = "Use Photo";
+    return;
+  }
+
+  const selectedSignature = getPhotoSignature(selectedPhotoFile);
+  const isAlreadyAnalyzed = photoAnalysis?.signature === selectedSignature;
+  photoButton.textContent = isAlreadyAnalyzed ? "Photo Ready (Change Photo)" : "Analyze Photo";
 }
 
 function parseIngredients(rawText) {
@@ -501,20 +532,84 @@ async function analyzePhotoWithOpenRouter(file) {
   };
 }
 
-photoButton.addEventListener("click", () => {
-  photoInput.click();
+async function analyzeSelectedPhoto() {
+  if (!selectedPhotoFile) {
+    throw new Error("Please select a photo first.");
+  }
+
+  const signature = getPhotoSignature(selectedPhotoFile);
+  if (photoAnalysis?.signature === signature) {
+    return photoAnalysis.result;
+  }
+
+  photoAnalysisInFlight = true;
+  syncPhotoButtonState();
+
+  try {
+    setPhotoStatus("Uploading photo for AI processing...");
+    const aiResult = await analyzePhotoWithOpenRouter(selectedPhotoFile);
+
+    photoAnalysis = {
+      signature,
+      result: aiResult,
+    };
+
+    if (aiResult.verdict) {
+      setAiVerdict(aiResult.verdict);
+    }
+
+    if (aiResult.ingredients) {
+      ingredientsInput.value = aiResult.ingredients.trim();
+    }
+
+    setPhotoStatus("Photo processed by AI. Review ingredients and press Submit.");
+    return aiResult;
+  } finally {
+    photoAnalysisInFlight = false;
+    syncPhotoButtonState();
+  }
+}
+
+photoButton.addEventListener("click", async () => {
+  hideError();
+
+  if (!selectedPhotoFile) {
+    photoInput.click();
+    return;
+  }
+
+  const selectedSignature = getPhotoSignature(selectedPhotoFile);
+  const isAlreadyAnalyzed = photoAnalysis?.signature === selectedSignature;
+
+  if (isAlreadyAnalyzed) {
+    photoInput.click();
+    return;
+  }
+
+  try {
+    await analyzeSelectedPhoto();
+  } catch (error) {
+    showError(error.message || "Could not process the photo. Please try again.");
+    setPhotoStatus("");
+  }
 });
 
 photoInput.addEventListener("change", () => {
   selectedPhotoFile = photoInput.files?.[0] || null;
+  photoAnalysis = null;
+  setAiVerdict("");
+
   if (selectedPhotoFile) {
     photoMeta.hidden = false;
     photoMeta.textContent = `Selected photo: ${selectedPhotoFile.name}`;
+    setPhotoStatus("Photo selected. Click Analyze Photo.");
   } else {
     photoMeta.hidden = true;
     photoMeta.textContent = "";
+    setPhotoStatus("");
   }
-  setPhotoStatus("");
+
+  syncPhotoButtonState();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -527,8 +622,7 @@ form.addEventListener("submit", async (event) => {
     let verdictFromPhoto = "";
 
     if (selectedPhotoFile) {
-      setPhotoStatus("Uploading photo for AI processing...");
-      const aiResult = await analyzePhotoWithOpenRouter(selectedPhotoFile);
+      const aiResult = await analyzeSelectedPhoto();
       verdictFromPhoto = aiResult.verdict;
 
       if (verdictFromPhoto) {
@@ -572,3 +666,5 @@ form.addEventListener("submit", async (event) => {
     setLoading(false);
   }
 });
+
+syncPhotoButtonState();
