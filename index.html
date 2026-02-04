@@ -29,6 +29,15 @@
         <section class="section-block">
           <h2>Take a Photo of Ingredients</h2>
           <p>Snap the ingredient list directly from your package.</p>
+          <label class="api-key-label" for="apiKeyInput">OpenRouter API key (required for photo AI)</label>
+          <input
+            id="apiKeyInput"
+            class="api-key-input"
+            type="password"
+            placeholder="sk-or-v1-..."
+            autocomplete="off"
+          />
+          <p class="api-key-help">Saved in your browser only for this demo.</p>
           <input id="photoInput" class="hidden-input" type="file" accept="image/*" capture="environment" />
           <button id="photoButton" class="btn btn-primary" type="button">Use Photo</button>
           <p id="photoMeta" class="photo-meta" hidden></p>

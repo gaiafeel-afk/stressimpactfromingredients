@@ -1,8 +1,8 @@
-const OPENROUTER_API_KEY = "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";
 const OPENROUTER_MODEL = "openai/gpt-4o-mini";
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const APP_URL = "https://gaiafeel-afk.github.io/stressimpactfromingredients/";
 const APP_NAME = "Stress Impact Ingredient Checker";
+const OPENROUTER_KEY_STORAGE = "openrouter_api_key";
 
 const TRIGGERS = [
   {
@@ -136,6 +136,7 @@ const photoInput = document.getElementById("photoInput");
 const photoButton = document.getElementById("photoButton");
 const photoMeta = document.getElementById("photoMeta");
 const photoStatus = document.getElementById("photoStatus");
+const apiKeyInput = document.getElementById("apiKeyInput");
 
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const resultPanel = document.getElementById("resultPanel");
@@ -190,6 +191,15 @@ function setAiVerdict(text) {
   aiVerdictText.textContent = text;
 }
 
+function getOpenRouterApiKey() {
+  return apiKeyInput.value.trim();
+}
+
+function hasOpenRouterKey() {
+  const key = getOpenRouterApiKey();
+  return Boolean(key && key.startsWith("sk-or-v1-"));
+}
+
 function getPhotoSignature(file) {
   return `${file.name}|${file.size}|${file.lastModified}`;
 }
@@ -215,7 +225,12 @@ function syncPhotoButtonState() {
 
   const selectedSignature = getPhotoSignature(selectedPhotoFile);
   const isAlreadyAnalyzed = photoAnalysis?.signature === selectedSignature;
-  photoButton.textContent = isAlreadyAnalyzed ? "Photo Ready (Change Photo)" : "Analyze Photo";
+  if (isAlreadyAnalyzed) {
+    photoButton.textContent = "Photo Ready (Change Photo)";
+    return;
+  }
+
+  photoButton.textContent = hasOpenRouterKey() ? "Analyze Photo" : "Analyze Photo (Add API Key)";
 }
 
 function parseIngredients(rawText) {
@@ -460,9 +475,9 @@ function extractIngredientsFromText(text) {
   return match[1].trim();
 }
 
-async function analyzePhotoWithOpenRouter(file) {
-  if (!OPENROUTER_API_KEY || !OPENROUTER_API_KEY.startsWith("sk-or-v1-")) {
-    throw new Error("OpenRouter API key is missing.");
+async function analyzePhotoWithOpenRouter(file, apiKey) {
+  if (!apiKey || !apiKey.startsWith("sk-or-v1-")) {
+    throw new Error("Add a valid OpenRouter API key first.");
   }
 
   const imageDataUrl = await fileToDataUrl(file);
@@ -500,7 +515,7 @@ async function analyzePhotoWithOpenRouter(file) {
   const response = await fetch(OPENROUTER_CHAT_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": APP_URL,
       "X-Title": APP_NAME,
@@ -510,6 +525,11 @@ async function analyzePhotoWithOpenRouter(file) {
 
   if (!response.ok) {
     const errorTextRaw = await response.text();
+    if (response.status === 401) {
+      throw new Error(
+        "OpenRouter rejected the API key (401 User not found). Generate a new key in OpenRouter and paste it above."
+      );
+    }
     throw new Error(
       `AI processing failed (${response.status}). ${errorTextRaw.slice(0, 140) || "Please try again."}`
     );
@@ -537,6 +557,11 @@ async function analyzeSelectedPhoto() {
     throw new Error("Please select a photo first.");
   }
 
+  const apiKey = getOpenRouterApiKey();
+  if (!apiKey) {
+    throw new Error("Paste your OpenRouter API key above, then tap Analyze Photo.");
+  }
+
   const signature = getPhotoSignature(selectedPhotoFile);
   if (photoAnalysis?.signature === signature) {
     return photoAnalysis.result;
@@ -547,7 +572,7 @@ async function analyzeSelectedPhoto() {
 
   try {
     setPhotoStatus("Uploading photo for AI processing...");
-    const aiResult = await analyzePhotoWithOpenRouter(selectedPhotoFile);
+    const aiResult = await analyzePhotoWithOpenRouter(selectedPhotoFile, apiKey);
 
     photoAnalysis = {
       signature,
@@ -612,6 +637,16 @@ photoInput.addEventListener("change", () => {
   syncPhotoButtonState();
 });
 
+apiKeyInput.addEventListener("input", () => {
+  const value = apiKeyInput.value.trim();
+  if (value) {
+    localStorage.setItem(OPENROUTER_KEY_STORAGE, value);
+  } else {
+    localStorage.removeItem(OPENROUTER_KEY_STORAGE);
+  }
+  syncPhotoButtonState();
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideError();
@@ -621,7 +656,7 @@ form.addEventListener("submit", async (event) => {
     let rawText = ingredientsInput.value.trim();
     let verdictFromPhoto = "";
 
-    if (selectedPhotoFile) {
+    if (selectedPhotoFile && hasOpenRouterKey()) {
       const aiResult = await analyzeSelectedPhoto();
       verdictFromPhoto = aiResult.verdict;
 
@@ -635,6 +670,12 @@ form.addEventListener("submit", async (event) => {
       }
 
       setPhotoStatus("Photo processed by AI.");
+    } else if (selectedPhotoFile && !hasOpenRouterKey() && !rawText) {
+      showError("Add a valid OpenRouter API key to analyze the photo, or paste ingredients manually.");
+      setPhotoStatus("");
+      return;
+    } else if (selectedPhotoFile && !hasOpenRouterKey() && rawText) {
+      setPhotoStatus("Photo skipped because API key is missing. Used pasted ingredients.");
     } else {
       setAiVerdict("");
     }
@@ -667,4 +708,5 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+apiKeyInput.value = localStorage.getItem(OPENROUTER_KEY_STORAGE) || "";
 syncPhotoButtonState();

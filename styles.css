@@ -104,6 +104,36 @@ h1 {
   display: none;
 }
 
+.api-key-label {
+  display: block;
+  margin-top: 0.9rem;
+  font-weight: 700;
+}
+
+.api-key-input {
+  margin-top: 0.45rem;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #afb0b6;
+  border-radius: 10px;
+  background: #f9faf8;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.api-key-input:focus {
+  outline: 0;
+  border-color: #3a5e4f;
+  box-shadow: 0 0 0 3px rgba(42, 91, 79, 0.2);
+}
+
+.api-key-help {
+  margin-top: 0.45rem;
+  font-size: 0.9rem;
+  color: #3d5960;
+}
+
 .btn {
   margin-top: 0.95rem;
   border: 0;

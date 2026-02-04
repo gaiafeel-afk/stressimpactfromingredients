@@ -6,6 +6,7 @@ Marketing-style web app that estimates potential stress impact from everyday ing
 
 - Accepts ingredient text by copy/paste
 - Sends uploaded photos to OpenRouter AI for ingredient + verdict processing
+- Lets you paste an OpenRouter API key in the UI (stored in browser localStorage)
 - Scores likely stress impact on a 0-100 scale
 - Highlights likely trigger ingredients
 - Surfaces potentially supportive ingredients
