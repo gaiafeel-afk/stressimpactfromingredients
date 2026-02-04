@@ -100,6 +100,11 @@
         </p>
 
         <div id="resultPanel" hidden>
+          <section id="aiVerdictSection" class="ai-verdict-section" hidden>
+            <h3>AI photo verdict</h3>
+            <p id="aiVerdictText" class="ai-verdict-text"></p>
+          </section>
+
           <div class="score-topline">
             <p class="score-label">Stress Impact Score</p>
             <p id="scoreValue" class="score-value"></p>
@@ -134,10 +139,10 @@
 
     <footer class="site-footer">
       Crafted for ingredient-led wellness marketing demos.
+      By uploading a photo, you agree it will be sent to AI processing for analysis.
       <a href="https://github.com/gaiafeel-afk/stressimpactfromingredients" target="_blank" rel="noreferrer noopener">View source</a>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="script.js" defer></script>
   </body>
 </html>

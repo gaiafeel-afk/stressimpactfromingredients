@@ -5,7 +5,7 @@ Marketing-style web app that estimates potential stress impact from everyday ing
 ## What it does
 
 - Accepts ingredient text by copy/paste
-- Supports photo upload with client-side OCR (Tesseract.js)
+- Sends uploaded photos to OpenRouter AI for ingredient + verdict processing
 - Scores likely stress impact on a 0-100 scale
 - Highlights likely trigger ingredients
 - Surfaces potentially supportive ingredients
@@ -36,3 +36,4 @@ Expected demo URL:
 ## Note
 
 This tool is educational and marketing-focused, not medical advice.
+Uploaded photos are sent to an AI processor (OpenRouter) to generate verdict text.

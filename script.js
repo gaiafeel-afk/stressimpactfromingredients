@@ -1,3 +1,9 @@
+const OPENROUTER_API_KEY = "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";
+const OPENROUTER_MODEL = "openai/gpt-4o-mini";
+const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+const APP_URL = "https://gaiafeel-afk.github.io/stressimpactfromingredients/";
+const APP_NAME = "Stress Impact Ingredient Checker";
+
 const TRIGGERS = [
   {
     id: "sugars",
@@ -133,6 +139,8 @@ const photoStatus = document.getElementById("photoStatus");
 
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const resultPanel = document.getElementById("resultPanel");
+const aiVerdictSection = document.getElementById("aiVerdictSection");
+const aiVerdictText = document.getElementById("aiVerdictText");
 const scoreValue = document.getElementById("scoreValue");
 const meterFill = document.getElementById("meterFill");
 const riskBadge = document.getElementById("riskBadge");
@@ -166,6 +174,17 @@ function setPhotoStatus(message) {
   }
   photoStatus.hidden = false;
   photoStatus.textContent = message;
+}
+
+function setAiVerdict(text) {
+  if (!text) {
+    aiVerdictSection.hidden = true;
+    aiVerdictText.textContent = "";
+    return;
+  }
+
+  aiVerdictSection.hidden = false;
+  aiVerdictText.textContent = text;
 }
 
 function parseIngredients(rawText) {
@@ -359,21 +378,127 @@ function renderResult(result) {
   renderList(recommendationList, result.recommendationItems);
 }
 
-async function extractTextFromPhoto(file) {
-  if (!window.Tesseract) {
-    throw new Error("OCR is unavailable in this browser. Please paste ingredients manually.");
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read the selected photo."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getAssistantText(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (typeof part?.text === "string" ? part.text : ""))
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
+function tryParseJson(text) {
+  if (!text) {
+    return null;
   }
 
-  const result = await window.Tesseract.recognize(file, "eng", {
-    logger: (message) => {
-      if (message.status === "recognizing text") {
-        const pct = Math.round((message.progress || 0) * 100);
-        setPhotoStatus(`Reading photo text... ${pct}%`);
-      }
+  const blockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const fromFence = blockMatch ? blockMatch[1].trim() : text.trim();
+
+  const firstBrace = fromFence.indexOf("{");
+  const lastBrace = fromFence.lastIndexOf("}");
+  const candidate =
+    firstBrace >= 0 && lastBrace > firstBrace ? fromFence.slice(firstBrace, lastBrace + 1) : fromFence;
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function extractIngredientsFromText(text) {
+  const match = text.match(/ingredients?\s*:\s*(.+)/i);
+  if (!match) {
+    return "";
+  }
+  return match[1].trim();
+}
+
+async function analyzePhotoWithOpenRouter(file) {
+  if (!OPENROUTER_API_KEY || !OPENROUTER_API_KEY.startsWith("sk-or-v1-")) {
+    throw new Error("OpenRouter API key is missing.");
+  }
+
+  const imageDataUrl = await fileToDataUrl(file);
+  const requestBody = {
+    model: OPENROUTER_MODEL,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You analyze ingredient photos and answer with compact JSON only. No markdown code fences.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              "Read this ingredient label photo. Return strict JSON with keys verdict and ingredients. " +
+              "verdict must be a concise plain-language stress-impact verdict under 60 words. " +
+              "ingredients must be a comma-separated ingredient list as seen in the image. " +
+              "If text is unreadable, set ingredients to an empty string and explain that in verdict.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageDataUrl,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const response = await fetch(OPENROUTER_CHAT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": APP_URL,
+      "X-Title": APP_NAME,
     },
+    body: JSON.stringify(requestBody),
   });
 
-  return result?.data?.text || "";
+  if (!response.ok) {
+    const errorTextRaw = await response.text();
+    throw new Error(
+      `AI processing failed (${response.status}). ${errorTextRaw.slice(0, 140) || "Please try again."}`
+    );
+  }
+
+  const payload = await response.json();
+  const assistantText = getAssistantText(payload);
+  if (!assistantText) {
+    throw new Error("AI returned an empty response.");
+  }
+
+  const parsed = tryParseJson(assistantText);
+  const verdict = typeof parsed?.verdict === "string" ? parsed.verdict.trim() : assistantText;
+  const ingredients =
+    typeof parsed?.ingredients === "string" ? parsed.ingredients.trim() : extractIngredientsFromText(assistantText);
+
+  return {
+    verdict,
+    ingredients,
+  };
 }
 
 photoButton.addEventListener("click", () => {
@@ -399,18 +524,33 @@ form.addEventListener("submit", async (event) => {
 
   try {
     let rawText = ingredientsInput.value.trim();
+    let verdictFromPhoto = "";
 
-    if (!rawText && selectedPhotoFile) {
-      setPhotoStatus("Reading ingredient text from your photo...");
-      rawText = (await extractTextFromPhoto(selectedPhotoFile)).trim();
-      if (rawText) {
-        ingredientsInput.value = rawText;
-        setPhotoStatus("Photo read complete. Review the text and edit if needed.");
+    if (selectedPhotoFile) {
+      setPhotoStatus("Uploading photo for AI processing...");
+      const aiResult = await analyzePhotoWithOpenRouter(selectedPhotoFile);
+      verdictFromPhoto = aiResult.verdict;
+
+      if (verdictFromPhoto) {
+        setAiVerdict(verdictFromPhoto);
       }
+
+      if (!rawText && aiResult.ingredients) {
+        rawText = aiResult.ingredients.trim();
+        ingredientsInput.value = rawText;
+      }
+
+      setPhotoStatus("Photo processed by AI.");
+    } else {
+      setAiVerdict("");
     }
 
     if (!rawText) {
-      showError("Add ingredients or upload a clear photo before submitting.");
+      if (verdictFromPhoto) {
+        showError("Photo verdict is ready. Paste or correct ingredients to generate the full score.");
+      } else {
+        showError("Add ingredients or upload a clear photo before submitting.");
+      }
       setPhotoStatus("");
       return;
     }
@@ -426,7 +566,7 @@ form.addEventListener("submit", async (event) => {
     renderResult(result);
     setPhotoStatus("");
   } catch (error) {
-    showError(error.message || "Could not read the photo. Please paste ingredients manually.");
+    showError(error.message || "Could not process the photo. Please try again or paste ingredients.");
     setPhotoStatus("");
   } finally {
     setLoading(false);
