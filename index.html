@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stress Impact Ingredient Checker</title>
+    <meta
+      name="description"
+      content="Upload or paste ingredients to estimate their possible stress impact with a clear, marketing-friendly score."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="checker-card">
+        <p class="brand">*STRESSPEDIA</p>
+        <h1>Stress Impact Ingredient Checker</h1>
+        <p class="intro">
+          Take a photo or paste your ingredient list. Get a fast, consumer-friendly stress impact
+          score built for educational and marketing campaigns.
+        </p>
+
+        <section class="section-block">
+          <h2>Take a Photo of Ingredients</h2>
+          <p>Snap the ingredient list directly from your package.</p>
+          <input id="photoInput" class="hidden-input" type="file" accept="image/*" capture="environment" />
+          <button id="photoButton" class="btn btn-primary" type="button">Use Photo</button>
+          <p id="photoMeta" class="photo-meta" hidden></p>
+
+          <details class="tips-panel">
+            <summary>Photo Tips &amp; Tricks</summary>
+            <div class="tips-content">
+              <h3>Photo Cropping Instructions</h3>
+              <ul>
+                <li>Zoom in and crop everything except ingredients.</li>
+                <li>If there are active ingredients, capture those separately.</li>
+              </ul>
+              <div class="example-grid">
+                <article>
+                  <h4>Good photo</h4>
+                  <div class="photo-example good"></div>
+                  <ul>
+                    <li>Sharp and straight</li>
+                    <li>Only ingredient text visible</li>
+                    <li>Bright lighting</li>
+                  </ul>
+                </article>
+                <article>
+                  <h4>Bad photo</h4>
+                  <div class="photo-example bad"></div>
+                  <ul>
+                    <li>Blurry or tilted</li>
+                    <li>Includes too much packaging</li>
+                    <li>Low-light capture</li>
+                  </ul>
+                </article>
+              </div>
+            </div>
+          </details>
+          <p id="photoStatus" class="photo-status" hidden></p>
+        </section>
+
+        <div class="or-row" aria-hidden="true">
+          <span></span>
+          <strong>OR</strong>
+          <span></span>
+        </div>
+
+        <form id="checkerForm" novalidate>
+          <section class="section-block">
+            <h2>Copy &amp; Paste Ingredients</h2>
+            <textarea
+              id="ingredientsInput"
+              rows="7"
+              placeholder="Tip: Ingredients are usually listed in order of concentration."
+            ></textarea>
+
+            <label class="checkbox-row">
+              <input id="jarCheckbox" type="checkbox" />
+              <span>My product comes in a jar.</span>
+            </label>
+
+            <button id="submitButton" type="submit" class="btn btn-primary">Submit</button>
+            <p id="errorText" class="error-text" hidden></p>
+          </section>
+        </form>
+      </section>
+
+      <section class="result-card" aria-live="polite">
+        <h2>Your Stress Impact Result</h2>
+        <p id="resultPlaceholder" class="result-placeholder">
+          Submit ingredients to view your stress impact score, top trigger ingredients, and cleaner
+          swap ideas.
+        </p>
+
+        <div id="resultPanel" hidden>
+          <div class="score-topline">
+            <p class="score-label">Stress Impact Score</p>
+            <p id="scoreValue" class="score-value"></p>
+          </div>
+          <div class="meter-track" aria-hidden="true">
+            <div id="meterFill" class="meter-fill"></div>
+          </div>
+          <p id="riskBadge" class="risk-badge"></p>
+          <p id="summaryText" class="summary-text"></p>
+
+          <section>
+            <h3>Likely stress triggers</h3>
+            <ul id="triggerList" class="insight-list"></ul>
+          </section>
+
+          <section>
+            <h3>Helpful ingredients spotted</h3>
+            <ul id="supportList" class="insight-list"></ul>
+          </section>
+
+          <section>
+            <h3>What to do next</h3>
+            <ul id="recommendationList" class="insight-list"></ul>
+          </section>
+        </div>
+
+        <p class="disclaimer">
+          Educational estimate only. This is not medical advice or a diagnosis.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      Crafted for ingredient-led wellness marketing demos.
+      <a href="https://github.com/gaiafeel-afk/stressimpactfromingredients" target="_blank" rel="noreferrer noopener">View source</a>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="script.js" defer></script>
+  </body>
+</html>
