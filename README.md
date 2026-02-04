@@ -5,8 +5,8 @@ Marketing-style web app that estimates potential stress impact from everyday ing
 ## What it does
 
 - Accepts ingredient text by copy/paste
-- Sends uploaded photos to OpenAI for ingredient + verdict processing
-- Lets you paste an OpenAI API key in the UI (stored in browser localStorage)
+- Uses free local OCR (Tesseract.js) to read uploaded ingredient photos
+- Does not require any API key
 - Scores likely stress impact on a 0-100 scale
 - Highlights likely trigger ingredients
 - Surfaces potentially supportive ingredients
@@ -37,4 +37,4 @@ Expected demo URL:
 ## Note
 
 This tool is educational and marketing-focused, not medical advice.
-Uploaded photos are sent to OpenAI to generate verdict text.
+Uploaded photos are processed locally in your browser for this demo.

@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Sora:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260204c" />
+    <link rel="stylesheet" href="styles.css?v=20260204d" />
   </head>
   <body>
     <main class="page-shell">
@@ -29,15 +29,6 @@
         <section class="section-block">
           <h2>Take a Photo of Ingredients</h2>
           <p>Snap the ingredient list directly from your package.</p>
-          <label class="api-key-label" for="apiKeyInput">OpenAI API key (required for photo AI)</label>
-          <input
-            id="apiKeyInput"
-            class="api-key-input"
-            type="password"
-            placeholder="sk-or-v1-..."
-            autocomplete="off"
-          />
-          <p class="api-key-help">Saved in your browser only for this demo session.</p>
           <input id="photoInput" class="hidden-input" type="file" accept="image/*" capture="environment" />
           <button id="photoButton" class="btn btn-primary" type="button">Use Photo</button>
           <p id="photoMeta" class="photo-meta" hidden></p>
@@ -148,10 +139,11 @@
 
     <footer class="site-footer">
       Crafted for ingredient-led wellness marketing demos.
-      By uploading a photo, you agree it will be sent to OpenAI for AI processing.
+      By uploading a photo, you agree to local AI-powered photo processing in your browser.
       <a href="https://github.com/gaiafeel-afk/stressimpactfromingredients" target="_blank" rel="noreferrer noopener">View source</a>
     </footer>
 
-    <script src="script.js?v=20260204c" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="script.js?v=20260204d" defer></script>
   </body>
 </html>

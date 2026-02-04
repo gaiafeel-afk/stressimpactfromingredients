@@ -1,7 +1,3 @@
-const OPENAI_MODEL = "gpt-4o-mini";
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_KEY_STORAGE = "openai_api_key";
-
 const TRIGGERS = [
   {
     id: "sugars",
@@ -134,7 +130,6 @@ const photoInput = document.getElementById("photoInput");
 const photoButton = document.getElementById("photoButton");
 const photoMeta = document.getElementById("photoMeta");
 const photoStatus = document.getElementById("photoStatus");
-const apiKeyInput = document.getElementById("apiKeyInput");
 
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const resultPanel = document.getElementById("resultPanel");
@@ -189,15 +184,6 @@ function setAiVerdict(text) {
   aiVerdictText.textContent = text;
 }
 
-function getOpenAiApiKey() {
-  return apiKeyInput.value.trim();
-}
-
-function hasOpenAiKey() {
-  const key = getOpenAiApiKey();
-  return Boolean(key && key.startsWith("sk-"));
-}
-
 function getPhotoSignature(file) {
   return `${file.name}|${file.size}|${file.lastModified}`;
 }
@@ -223,12 +209,7 @@ function syncPhotoButtonState() {
 
   const selectedSignature = getPhotoSignature(selectedPhotoFile);
   const isAlreadyAnalyzed = photoAnalysis?.signature === selectedSignature;
-  if (isAlreadyAnalyzed) {
-    photoButton.textContent = "Photo Ready (Change Photo)";
-    return;
-  }
-
-  photoButton.textContent = hasOpenAiKey() ? "Analyze Photo" : "Analyze Photo (Add API Key)";
+  photoButton.textContent = isAlreadyAnalyzed ? "Photo Ready (Change Photo)" : "Analyze Photo";
 }
 
 function parseIngredients(rawText) {
@@ -422,138 +403,33 @@ function renderResult(result) {
   renderList(recommendationList, result.recommendationItems);
 }
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read the selected photo."));
-    reader.readAsDataURL(file);
-  });
+function buildPhotoVerdict(result, ingredientCount) {
+  const topTrigger = Array.isArray(result.triggerItems) ? result.triggerItems[0] || "" : "";
+  const topTriggerLabel = topTrigger.includes(":") ? topTrigger.split(":")[0].toLowerCase() : "";
+  const topText = topTriggerLabel && !topTriggerLabel.startsWith("no major") ? ` Top flag: ${topTriggerLabel}.` : "";
+  return `Detected about ${ingredientCount} ingredients. ${result.risk.label}. ${result.summary}${topText}`;
 }
 
-function getAssistantText(payload) {
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content === "string") {
-    return content.trim();
-  }
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => (typeof part?.text === "string" ? part.text : ""))
-      .join("\n")
-      .trim();
-  }
-  return "";
-}
-
-function tryParseJson(text) {
-  if (!text) {
-    return null;
+async function extractTextFromPhotoLocally(file) {
+  if (!window.Tesseract) {
+    throw new Error("Photo OCR failed to load. Please refresh and try again.");
   }
 
-  const blockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const fromFence = blockMatch ? blockMatch[1].trim() : text.trim();
-
-  const firstBrace = fromFence.indexOf("{");
-  const lastBrace = fromFence.lastIndexOf("}");
-  const candidate =
-    firstBrace >= 0 && lastBrace > firstBrace ? fromFence.slice(firstBrace, lastBrace + 1) : fromFence;
-
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    return null;
-  }
-}
-
-function extractIngredientsFromText(text) {
-  const match = text.match(/ingredients?\s*:\s*(.+)/i);
-  if (!match) {
-    return "";
-  }
-  return match[1].trim();
-}
-
-async function analyzePhotoWithOpenAi(file, apiKey) {
-  if (!apiKey || !apiKey.startsWith("sk-")) {
-    throw new Error("Add a valid OpenAI API key first.");
-  }
-
-  const imageDataUrl = await fileToDataUrl(file);
-  const requestBody = {
-    model: OPENAI_MODEL,
-    temperature: 0.2,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You analyze ingredient photos and answer with compact JSON only. No markdown code fences.",
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text:
-              "Read this ingredient label photo. Return strict JSON with keys verdict and ingredients. " +
-              "verdict must be a concise plain-language stress-impact verdict under 60 words. " +
-              "ingredients must be a comma-separated ingredient list as seen in the image. " +
-              "If text is unreadable, set ingredients to an empty string and explain that in verdict.",
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: imageDataUrl,
-            },
-          },
-        ],
-      },
-    ],
-  };
-
-  const response = await fetch(OPENAI_CHAT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const result = await window.Tesseract.recognize(file, "eng", {
+    logger: (message) => {
+      if (message.status === "recognizing text") {
+        const pct = Math.round((message.progress || 0) * 100);
+        setPhotoStatus(`Analyzing photo locally... ${pct}%`);
+      }
     },
-    body: JSON.stringify(requestBody),
   });
 
-  if (!response.ok) {
-    const errorTextRaw = await response.text();
-    if (response.status === 401) {
-      throw new Error("OpenAI rejected this API key (401). Paste a valid OpenAI `sk-...` key and try again.");
-    }
-    throw new Error(
-      `AI processing failed (${response.status}). ${errorTextRaw.slice(0, 140) || "Please try again."}`
-    );
-  }
-
-  const payload = await response.json();
-  const assistantText = getAssistantText(payload);
-  if (!assistantText) {
-    throw new Error("AI returned an empty response.");
-  }
-
-  const parsed = tryParseJson(assistantText);
-  const verdict = typeof parsed?.verdict === "string" ? parsed.verdict.trim() : assistantText;
-  const ingredients =
-    typeof parsed?.ingredients === "string" ? parsed.ingredients.trim() : extractIngredientsFromText(assistantText);
-
-  return {
-    verdict,
-    ingredients,
-  };
+  return result?.data?.text || "";
 }
 
 async function analyzeSelectedPhoto() {
   if (!selectedPhotoFile) {
     throw new Error("Please select a photo first.");
-  }
-
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) {
-    throw new Error("Paste your OpenAI API key above, then tap Analyze Photo.");
   }
 
   const signature = getPhotoSignature(selectedPhotoFile);
@@ -565,23 +441,44 @@ async function analyzeSelectedPhoto() {
   syncPhotoButtonState();
 
   try {
-    setPhotoStatus("Uploading photo for AI processing...");
-    const aiResult = await analyzePhotoWithOpenAi(selectedPhotoFile, apiKey);
+    setPhotoStatus("Analyzing photo locally...");
+    const rawOcr = (await extractTextFromPhotoLocally(selectedPhotoFile)).trim();
+
+    if (!rawOcr) {
+      const emptyResult = {
+        verdict: "Could not read ingredient text clearly. Please retake a sharper, well-lit photo.",
+        ingredients: "",
+      };
+      photoAnalysis = { signature, result: emptyResult };
+      setAiVerdict(emptyResult.verdict);
+      setPhotoStatus("No readable text detected. Try a clearer photo.");
+      return emptyResult;
+    }
+
+    const parsedIngredients = parseIngredients(rawOcr);
+    const normalizedIngredients = parsedIngredients.length > 0 ? parsedIngredients.join(", ") : rawOcr;
+    if (normalizedIngredients) {
+      ingredientsInput.value = normalizedIngredients;
+    }
+
+    let verdict = "Photo text extracted. Please review and edit ingredients before submitting.";
+    if (parsedIngredients.length > 0) {
+      const previewResult = scoreIngredients(parsedIngredients, jarCheckbox.checked);
+      verdict = buildPhotoVerdict(previewResult, parsedIngredients.length);
+    }
+
+    const aiResult = {
+      verdict,
+      ingredients: normalizedIngredients,
+    };
 
     photoAnalysis = {
       signature,
       result: aiResult,
     };
 
-    if (aiResult.verdict) {
-      setAiVerdict(aiResult.verdict);
-    }
-
-    if (aiResult.ingredients) {
-      ingredientsInput.value = aiResult.ingredients.trim();
-    }
-
-    setPhotoStatus("Photo processed by AI. Review ingredients and press Submit.");
+    setAiVerdict(aiResult.verdict);
+    setPhotoStatus("Photo analyzed locally. Review ingredients and press Submit.");
     return aiResult;
   } finally {
     photoAnalysisInFlight = false;
@@ -599,7 +496,6 @@ photoButton.addEventListener("click", async () => {
 
   const selectedSignature = getPhotoSignature(selectedPhotoFile);
   const isAlreadyAnalyzed = photoAnalysis?.signature === selectedSignature;
-
   if (isAlreadyAnalyzed) {
     photoInput.click();
     return;
@@ -631,16 +527,6 @@ photoInput.addEventListener("change", () => {
   syncPhotoButtonState();
 });
 
-apiKeyInput.addEventListener("input", () => {
-  const value = apiKeyInput.value.trim();
-  if (value) {
-    localStorage.setItem(OPENAI_KEY_STORAGE, value);
-  } else {
-    localStorage.removeItem(OPENAI_KEY_STORAGE);
-  }
-  syncPhotoButtonState();
-});
-
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideError();
@@ -650,33 +536,25 @@ form.addEventListener("submit", async (event) => {
     let rawText = ingredientsInput.value.trim();
     let verdictFromPhoto = "";
 
-    if (selectedPhotoFile && hasOpenAiKey()) {
-      const aiResult = await analyzeSelectedPhoto();
-      verdictFromPhoto = aiResult.verdict;
+    if (selectedPhotoFile) {
+      const photoResult = await analyzeSelectedPhoto();
+      verdictFromPhoto = photoResult.verdict;
 
       if (verdictFromPhoto) {
         setAiVerdict(verdictFromPhoto);
       }
 
-      if (!rawText && aiResult.ingredients) {
-        rawText = aiResult.ingredients.trim();
+      if (!rawText && photoResult.ingredients) {
+        rawText = photoResult.ingredients.trim();
         ingredientsInput.value = rawText;
       }
-
-      setPhotoStatus("Photo processed by AI.");
-    } else if (selectedPhotoFile && !hasOpenAiKey() && !rawText) {
-      showError("Add a valid OpenAI API key to analyze the photo, or paste ingredients manually.");
-      setPhotoStatus("");
-      return;
-    } else if (selectedPhotoFile && !hasOpenAiKey() && rawText) {
-      setPhotoStatus("Photo skipped because API key is missing. Used pasted ingredients.");
     } else {
       setAiVerdict("");
     }
 
     if (!rawText) {
       if (verdictFromPhoto) {
-        showError("Photo verdict is ready. Paste or correct ingredients to generate the full score.");
+        showError("Photo verdict is ready. Please review or add ingredients to generate the full score.");
       } else {
         showError("Add ingredients or upload a clear photo before submitting.");
       }
@@ -702,5 +580,4 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-apiKeyInput.value = localStorage.getItem(OPENAI_KEY_STORAGE) || "";
 syncPhotoButtonState();
